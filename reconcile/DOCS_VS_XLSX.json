@@ -1,0 +1,649 @@
+{
+  "docx": {
+    "contratos": 5000.0,
+    "principal_total": 204222608.95,
+    "over60_n": 1192.0,
+    "over60_pct": 23.84,
+    "lgd_pct": 92.25,
+    "ead_total": 30744275764.0,
+    "pe_valor": 67615873.39
+  },
+  "xlsx": {
+    "resumo": {
+      "contratos": 5000.0,
+      "brl_total": 20422260.894999962
+    },
+    "lgd_pct": 91.5301057579146,
+    "fpd_safras": 20
+  },
+  "checks": [
+    {
+      "name": "contratos",
+      "computed": 5000.0,
+      "golden": 5000.0,
+      "diff": 0.0,
+      "tol": 0,
+      "kind": "count",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "principal_total",
+      "computed": 204222608.95,
+      "golden": 20422260.894999962,
+      "diff": 183800348.055,
+      "tol": 1.0,
+      "kind": "money",
+      "passed": false,
+      "note": "DOCX/XLSX ratio = 10.0\u00d7"
+    },
+    {
+      "name": "LGD %",
+      "computed": 92.25,
+      "golden": 91.5301057579146,
+      "diff": 0.719894,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": false,
+      "note": "DOCX 92.25% (final) vs XLSX PE-sheet ~91.53% (first part)"
+    },
+    {
+      "name": "FPD30 qtd% 2024-04",
+      "computed": 14.52,
+      "golden": 14.5228,
+      "diff": 0.0028,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-04",
+      "computed": 17.92,
+      "golden": 17.9222,
+      "diff": 0.0022,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-05",
+      "computed": 16.88,
+      "golden": 16.8776,
+      "diff": 0.0024,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-05",
+      "computed": 17.0,
+      "golden": 16.9973,
+      "diff": 0.0027,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-06",
+      "computed": 12.68,
+      "golden": 12.6829,
+      "diff": 0.0029,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-06",
+      "computed": 11.74,
+      "golden": 11.7396,
+      "diff": 0.0004,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-07",
+      "computed": 19.7,
+      "golden": 19.7044,
+      "diff": 0.0044,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-07",
+      "computed": 20.99,
+      "golden": 20.9929,
+      "diff": 0.0029,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-08",
+      "computed": 17.39,
+      "golden": 17.3913,
+      "diff": 0.0013,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-08",
+      "computed": 19.24,
+      "golden": 19.238,
+      "diff": 0.002,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-09",
+      "computed": 20.71,
+      "golden": 20.7071,
+      "diff": 0.0029,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-09",
+      "computed": 20.67,
+      "golden": 20.67,
+      "diff": 0.0,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-10",
+      "computed": 18.18,
+      "golden": 18.1818,
+      "diff": 0.0018,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-10",
+      "computed": 16.57,
+      "golden": 16.5747,
+      "diff": 0.0047,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-11",
+      "computed": 15.94,
+      "golden": 15.942,
+      "diff": 0.002,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-11",
+      "computed": 14.62,
+      "golden": 14.6213,
+      "diff": 0.0013,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2024-12",
+      "computed": 11.48,
+      "golden": 11.4833,
+      "diff": 0.0033,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2024-12",
+      "computed": 12.18,
+      "golden": 12.1786,
+      "diff": 0.0014,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-01",
+      "computed": 14.61,
+      "golden": 14.6119,
+      "diff": 0.0019,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-01",
+      "computed": 11.76,
+      "golden": 11.7562,
+      "diff": 0.0038,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-02",
+      "computed": 15.23,
+      "golden": 15.2284,
+      "diff": 0.0016,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-02",
+      "computed": 17.21,
+      "golden": 17.2104,
+      "diff": 0.0004,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-03",
+      "computed": 12.44,
+      "golden": 12.4378,
+      "diff": 0.0022,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-03",
+      "computed": 11.62,
+      "golden": 11.6178,
+      "diff": 0.0022,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-04",
+      "computed": 18.8,
+      "golden": 18.8034,
+      "diff": 0.0034,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-04",
+      "computed": 18.39,
+      "golden": 18.3943,
+      "diff": 0.0043,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-05",
+      "computed": 14.85,
+      "golden": 14.8472,
+      "diff": 0.0028,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-05",
+      "computed": 10.95,
+      "golden": 10.9454,
+      "diff": 0.0046,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-06",
+      "computed": 23.08,
+      "golden": 23.0769,
+      "diff": 0.0031,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-06",
+      "computed": 21.52,
+      "golden": 21.5184,
+      "diff": 0.0016,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-07",
+      "computed": 17.94,
+      "golden": 17.9372,
+      "diff": 0.0028,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-07",
+      "computed": 20.57,
+      "golden": 20.5652,
+      "diff": 0.0048,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-08",
+      "computed": 19.57,
+      "golden": 19.5745,
+      "diff": 0.0045,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-08",
+      "computed": 22.96,
+      "golden": 22.9597,
+      "diff": 0.0003,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-09",
+      "computed": 16.06,
+      "golden": 16.055,
+      "diff": 0.005,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-09",
+      "computed": 16.91,
+      "golden": 16.9078,
+      "diff": 0.0022,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-10",
+      "computed": 19.38,
+      "golden": 19.3833,
+      "diff": 0.0033,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-10",
+      "computed": 20.55,
+      "golden": 20.5535,
+      "diff": 0.0035,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 qtd% 2025-11",
+      "computed": 23.33,
+      "golden": 23.3333,
+      "diff": 0.0033,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    },
+    {
+      "name": "FPD30 val% 2025-11",
+      "computed": 25.49,
+      "golden": 25.4937,
+      "diff": 0.0037,
+      "tol": 0.01,
+      "kind": "pct",
+      "passed": true,
+      "note": ""
+    }
+  ],
+  "fpd_by_safra": [
+    {
+      "safra": "2024-04",
+      "docx_qtd": 14.52,
+      "xlsx_qtd": 14.5228,
+      "diff_qtd": 0.0028,
+      "docx_val": 17.92,
+      "xlsx_val": 17.9222,
+      "diff_val": 0.0022
+    },
+    {
+      "safra": "2024-05",
+      "docx_qtd": 16.88,
+      "xlsx_qtd": 16.8776,
+      "diff_qtd": 0.0024,
+      "docx_val": 17.0,
+      "xlsx_val": 16.9973,
+      "diff_val": 0.0027
+    },
+    {
+      "safra": "2024-06",
+      "docx_qtd": 12.68,
+      "xlsx_qtd": 12.6829,
+      "diff_qtd": 0.0029,
+      "docx_val": 11.74,
+      "xlsx_val": 11.7396,
+      "diff_val": 0.0004
+    },
+    {
+      "safra": "2024-07",
+      "docx_qtd": 19.7,
+      "xlsx_qtd": 19.7044,
+      "diff_qtd": 0.0044,
+      "docx_val": 20.99,
+      "xlsx_val": 20.9929,
+      "diff_val": 0.0029
+    },
+    {
+      "safra": "2024-08",
+      "docx_qtd": 17.39,
+      "xlsx_qtd": 17.3913,
+      "diff_qtd": 0.0013,
+      "docx_val": 19.24,
+      "xlsx_val": 19.238,
+      "diff_val": 0.002
+    },
+    {
+      "safra": "2024-09",
+      "docx_qtd": 20.71,
+      "xlsx_qtd": 20.7071,
+      "diff_qtd": 0.0029,
+      "docx_val": 20.67,
+      "xlsx_val": 20.67,
+      "diff_val": 0.0
+    },
+    {
+      "safra": "2024-10",
+      "docx_qtd": 18.18,
+      "xlsx_qtd": 18.1818,
+      "diff_qtd": 0.0018,
+      "docx_val": 16.57,
+      "xlsx_val": 16.5747,
+      "diff_val": 0.0047
+    },
+    {
+      "safra": "2024-11",
+      "docx_qtd": 15.94,
+      "xlsx_qtd": 15.942,
+      "diff_qtd": 0.002,
+      "docx_val": 14.62,
+      "xlsx_val": 14.6213,
+      "diff_val": 0.0013
+    },
+    {
+      "safra": "2024-12",
+      "docx_qtd": 11.48,
+      "xlsx_qtd": 11.4833,
+      "diff_qtd": 0.0033,
+      "docx_val": 12.18,
+      "xlsx_val": 12.1786,
+      "diff_val": 0.0014
+    },
+    {
+      "safra": "2025-01",
+      "docx_qtd": 14.61,
+      "xlsx_qtd": 14.6119,
+      "diff_qtd": 0.0019,
+      "docx_val": 11.76,
+      "xlsx_val": 11.7562,
+      "diff_val": 0.0038
+    },
+    {
+      "safra": "2025-02",
+      "docx_qtd": 15.23,
+      "xlsx_qtd": 15.2284,
+      "diff_qtd": 0.0016,
+      "docx_val": 17.21,
+      "xlsx_val": 17.2104,
+      "diff_val": 0.0004
+    },
+    {
+      "safra": "2025-03",
+      "docx_qtd": 12.44,
+      "xlsx_qtd": 12.4378,
+      "diff_qtd": 0.0022,
+      "docx_val": 11.62,
+      "xlsx_val": 11.6178,
+      "diff_val": 0.0022
+    },
+    {
+      "safra": "2025-04",
+      "docx_qtd": 18.8,
+      "xlsx_qtd": 18.8034,
+      "diff_qtd": 0.0034,
+      "docx_val": 18.39,
+      "xlsx_val": 18.3943,
+      "diff_val": 0.0043
+    },
+    {
+      "safra": "2025-05",
+      "docx_qtd": 14.85,
+      "xlsx_qtd": 14.8472,
+      "diff_qtd": 0.0028,
+      "docx_val": 10.95,
+      "xlsx_val": 10.9454,
+      "diff_val": 0.0046
+    },
+    {
+      "safra": "2025-06",
+      "docx_qtd": 23.08,
+      "xlsx_qtd": 23.0769,
+      "diff_qtd": 0.0031,
+      "docx_val": 21.52,
+      "xlsx_val": 21.5184,
+      "diff_val": 0.0016
+    },
+    {
+      "safra": "2025-07",
+      "docx_qtd": 17.94,
+      "xlsx_qtd": 17.9372,
+      "diff_qtd": 0.0028,
+      "docx_val": 20.57,
+      "xlsx_val": 20.5652,
+      "diff_val": 0.0048
+    },
+    {
+      "safra": "2025-08",
+      "docx_qtd": 19.57,
+      "xlsx_qtd": 19.5745,
+      "diff_qtd": 0.0045,
+      "docx_val": 22.96,
+      "xlsx_val": 22.9597,
+      "diff_val": 0.0003
+    },
+    {
+      "safra": "2025-09",
+      "docx_qtd": 16.06,
+      "xlsx_qtd": 16.055,
+      "diff_qtd": 0.005,
+      "docx_val": 16.91,
+      "xlsx_val": 16.9078,
+      "diff_val": 0.0022
+    },
+    {
+      "safra": "2025-10",
+      "docx_qtd": 19.38,
+      "xlsx_qtd": 19.3833,
+      "diff_qtd": 0.0033,
+      "docx_val": 20.55,
+      "xlsx_val": 20.5535,
+      "diff_val": 0.0035
+    },
+    {
+      "safra": "2025-11",
+      "docx_qtd": 23.33,
+      "xlsx_qtd": 23.3333,
+      "diff_qtd": 0.0033,
+      "docx_val": 25.49,
+      "xlsx_val": 25.4937,
+      "diff_val": 0.0037
+    }
+  ],
+  "structural": {
+    "principal_docx": 204222608.95,
+    "principal_xlsx": 20422260.894999962,
+    "principal_ratio_docx_over_xlsx": 10.0,
+    "lgd_docx_pct": 92.25,
+    "lgd_xlsx_pct": 91.5301057579146,
+    "fpd_safras_compared": 20,
+    "fpd_docx_total": 24,
+    "fpd_xlsx_total": 20
+  },
+  "summary": {
+    "total": 43,
+    "passed": 41,
+    "failed": 2,
+    "green": false
+  }
+}

@@ -1,0 +1,7 @@
+flowchart LR
+  IN["CSV inputs<br/>LOANS · INSTALLMENTS · RENEG · META"]
+  IN --> X["XLSX — first part<br/>raw working model"]
+  IN --> D["DOCX — final<br/>delivered report"]
+  X --> DX["money ÷ 10<br/>LGD 91.53%<br/>+ raw loans (UF/Idade), Ever60 curves<br/>+ Carteira aging, per-safra PE<br/>FPD: 20 safras"]
+  D --> DD["money × 10<br/>LGD 92.25%<br/>+ VPL 3×2 grid, narrative<br/>+ rating, faixas, espécie/canal/prazo<br/>FPD: 24 safras"]
+  DX -. same cohort, different stage .-> DD

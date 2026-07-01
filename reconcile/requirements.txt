@@ -1,0 +1,6 @@
+# Dependencies for the validacao/reconcile/ audit scripts.
+# Install into a scratch venv OUTSIDE the golden folder, e.g.:
+#   uv venv --python 3.12 <venv> && uv pip install --python <venv>/bin/python -r requirements.txt
+pandas>=2.2
+openpyxl>=3.1
+pypdf>=4.0
