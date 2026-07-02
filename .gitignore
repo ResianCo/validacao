@@ -1,0 +1,10 @@
+# Generated pipeline outputs (regenerated each run by bin/pipeline_csv.py)
+/output/*
+!/output/.gitkeep
+
+# DuckDB spill dirs (regenerated at runtime)
+/duck_tmp/
+/input/duck_tmp/
+
+# macOS
+.DS_Store

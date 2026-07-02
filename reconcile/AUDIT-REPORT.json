@@ -1,7 +1,7 @@
 {
   "summary": {
-    "total": 107,
-    "passed": 99,
+    "total": 105,
+    "passed": 97,
     "failed": 8,
     "green": false
   },
@@ -927,26 +927,6 @@
       "note": ""
     },
     {
-      "name": "A\u00b7PDF cites PE",
-      "computed": 67615873.39,
-      "golden": 67615873.39,
-      "diff": 0.0,
-      "tol": 1.0,
-      "kind": "money",
-      "passed": true,
-      "note": ""
-    },
-    {
-      "name": "A\u00b7PDF cites LGD",
-      "computed": 92.25,
-      "golden": 92.25,
-      "diff": 0.0,
-      "tol": 0.01,
-      "kind": "pct",
-      "passed": true,
-      "note": ""
-    },
-    {
       "name": "B\u00b7XLSX Loans count",
       "computed": 5000,
       "golden": 5000.0,
@@ -1078,7 +1058,6 @@
     }
   ],
   "notes": [
-    "PDF is an architecture/scaling report (4 pages); checked only that it cites the DOCX golden numbers.",
     "XLSX ever60: 48 safra curves, 3 non-monotonic (2025-09, 2025-10, 2025-11 \u2014 all youngest safras, likely a workbook artifact).",
     "XLSX->DOCX UF lineage: 10/10 UF contrato counts match (principal is \u00f710 in XLSX, expected)."
   ],

@@ -23,10 +23,34 @@ import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-GOLDEN = Path("/Users/thiago/Resian/validacao")
-DOCX = GOLDEN / "Banco_ABC_Valuation_Resian_2026-05_1.docx"
-XLSX = GOLDEN / "20260612 Teste - Análise de Carteira.xlsx"
-OUT = GOLDEN / "reconcile"
+# Resolve paths relative to the repo root (parent of this reconcile/ dir), so the
+# audit works from any checkout — not tied to /Users/thiago/....
+REPO = Path(__file__).resolve().parent.parent
+DOCX = REPO / "Banco_ABC_Valuation_Resian_2026-05_1.docx"
+# The XLSX ships as a zip-of-xlsx; see resolve_xlsx_path() below.
+XLSX_ZIP = REPO / "20260612 Teste - Análise de Carteira.xlsx.zip"
+OUT = REPO / "reconcile"
+
+
+def resolve_xlsx_path(path: Path) -> tuple[Path, bool]:
+    """Return a path openpyxl can read.
+
+    The XLSX is stored as `*.xlsx.zip` (a zip containing the workbook plus macOS
+    `__MACOSX` cruft). openpyxl cannot read a zip directly, so when given the zip
+    we extract the inner .xlsx to a NamedTemporaryFile and return it. The caller
+    must unlink the temp path when done (the bool return signals this).
+    """
+    import tempfile, zipfile
+    path = Path(path)
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as z:
+            inner = next(n for n in z.namelist()
+                         if n.lower().endswith(".xlsx") and "__MACOSX" not in n)
+            tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+            tmp.write(z.read(inner))
+            tmp.close()
+            return Path(tmp.name), True
+    return path, False
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -176,7 +200,12 @@ def _is_num(v):
 
 def extract_xlsx(path: Path) -> dict:
     import openpyxl
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    real_path, is_temp = resolve_xlsx_path(path)
+    try:
+        wb = openpyxl.load_workbook(real_path, read_only=True, data_only=True)
+    finally:
+        if is_temp:
+            real_path.unlink(missing_ok=True)
     out = {"sheets": list(wb.sheetnames)}
 
     # Resumo TOTAL: contratos + BRL.
@@ -328,7 +357,7 @@ def render_markdown(rep: dict) -> str:
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--docx", default=str(DOCX))
-    ap.add_argument("--xlsx", default=str(XLSX))
+    ap.add_argument("--xlsx", default=str(XLSX_ZIP))
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()
 

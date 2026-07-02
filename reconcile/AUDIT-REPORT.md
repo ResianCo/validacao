@@ -1,6 +1,6 @@
 # AUDIT REPORT — validacao golden folder
 
-**99/107 checks passed — RED**
+**97/105 checks passed — RED**
 
 Two-layer model: **XLSX = first part** (raw/intermediate), **DOCX = final** (delivered report).
 `pipeline_csv.py` output is the engine that reproduces the DOCX from the CSV inputs.
@@ -19,7 +19,6 @@ Two-layer model: **XLSX = first part** (raw/intermediate), **DOCX = final** (del
 
 ## Notes
 
-- PDF is an architecture/scaling report (4 pages); checked only that it cites the DOCX golden numbers.
 - XLSX ever60: 48 safra curves, 3 non-monotonic (2025-09, 2025-10, 2025-11 — all youngest safras, likely a workbook artifact).
 - XLSX->DOCX UF lineage: 10/10 UF contrato counts match (principal is ÷10 in XLSX, expected).
 
@@ -119,8 +118,6 @@ Two-layer model: **XLSX = first part** (raw/intermediate), **DOCX = final** (del
 | A·self rating Σprincipal | 204222610.0 | 204222608.95 | 1.05 | 5.0 | PASS | docx rating principals are integer-rounded |
 | A·self faixas Σcontratos | 5000.0 | 5000.0 | 0.0 | 0 | PASS |  |
 | A·self faixas acumulado ends 100 | 100.0 | 100.0 | 0.0 | 0.01 | PASS |  |
-| A·PDF cites PE | 67615873.39 | 67615873.39 | 0.0 | 1.0 | PASS |  |
-| A·PDF cites LGD | 92.25 | 92.25 | 0.0 | 0.01 | PASS |  |
 | B·XLSX Loans count | 5000 | 5000.0 | 0.0 | 0 | PASS |  |
 | B·XLSX Resumo contratos | 5000.0 | 5000.0 | 0.0 | 0 | PASS |  |
 | B·Ever60 curves monotonic (non-decreasing) | 3 | 0 | 3.0 | 0 | **FAIL** | 48 safra curves checked; non-monotonic: 2025-09, 2025-10, 2025-11 |

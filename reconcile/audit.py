@@ -31,11 +31,35 @@ from pathlib import Path
 
 import pandas as pd
 
-GOLDEN = Path("/Users/thiago/Resian/validacao")
-DOCX = GOLDEN / "Banco_ABC_Valuation_Resian_2026-05_1.docx"
-XLSX = GOLDEN / "20260612 Teste - Análise de Carteira.xlsx"
-PDF = GOLDEN / "20260625-EXECUTIVE_REPORT_Thiago.pdf"
-OUT = GOLDEN / "reconcile"
+# Resolve paths relative to the repo root (parent of this reconcile/ dir), so the
+# audit works from any checkout — not tied to /Users/thiago/....
+REPO = Path(__file__).resolve().parent.parent
+DOCX = REPO / "Banco_ABC_Valuation_Resian_2026-05_1.docx"
+# The XLSX ships as a zip-of-xlsx; see resolve_xlsx_path() below.
+XLSX_ZIP = REPO / "20260612 Teste - Análise de Carteira.xlsx.zip"
+PDF = REPO / "20260625-EXECUTIVE_REPORT_Thiago.pdf"
+OUT = REPO / "reconcile"
+
+
+def resolve_xlsx_path(path: Path) -> tuple[Path, bool]:
+    """Return a path openpyxl can read.
+
+    The XLSX is stored as `*.xlsx.zip` (a zip containing the workbook plus macOS
+    `__MACOSX` cruft). openpyxl cannot read a zip directly, so when given the zip
+    we extract the inner .xlsx to a NamedTemporaryFile and return it. The caller
+    must unlink the temp path when done (the bool return signals this).
+    """
+    import tempfile, zipfile
+    path = Path(path)
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as z:
+            inner = next(n for n in z.namelist()
+                         if n.lower().endswith(".xlsx") and "__MACOSX" not in n)
+            tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+            tmp.write(z.read(inner))
+            tmp.close()
+            return Path(tmp.name), True
+    return path, False
 
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -219,7 +243,12 @@ def extract_docx(path: Path) -> dict:
 # ----------------------------- XLSX extraction ---------------------------
 def extract_xlsx(path: Path) -> dict:
     import openpyxl
-    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    real_path, is_temp = resolve_xlsx_path(path)
+    try:
+        wb = openpyxl.load_workbook(real_path, read_only=True, data_only=True)
+    finally:
+        if is_temp:
+            real_path.unlink(missing_ok=True)
     out = {"sheets": list(wb.sheetnames)}
 
     # Loans sheet: header-driven column discovery (UF, Maior Atraso, Valor Emprestado).
@@ -296,6 +325,8 @@ def extract_pdf_numbers(path: Path) -> dict:
     try:
         from pypdf import PdfReader
     except ImportError:
+        return {"available": False}
+    if not Path(path).exists():
         return {"available": False}
     r = PdfReader(str(path))
     text = "\n".join((p.extract_text() or "") for p in r.pages)
@@ -556,7 +587,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("pipeline_output_dir")
     ap.add_argument("--docx", default=str(DOCX))
-    ap.add_argument("--xlsx", default=str(XLSX))
+    ap.add_argument("--xlsx", default=str(XLSX_ZIP))
     ap.add_argument("--pdf", default=str(PDF))
     ap.add_argument("--out", default=str(OUT))
     args = ap.parse_args()

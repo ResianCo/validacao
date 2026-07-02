@@ -1,19 +1,35 @@
 # AGENTS.md
 
 Two-script credit-portfolio valuation pipeline (Resian Consultoria, Brazilian
-consignado / INSS). No tests, no `requirements.txt`, no git. Inputs are large
+consignado / INSS). No tests, no `requirements.txt`. Inputs are large
 CSVs; outputs are ~19 CSVs handed off to Claude.ai to produce a DOCX report.
+
+## Layout
+
+```
+validacao/
+├── bin/        # runnable scripts: pipeline_csv.py, passo0_validacao.py
+├── input/      # raw CSVs (LOANS/INSTALLMENTS/RENEG/META) — LFS-tracked
+├── output/     # generated 19 CSVs — gitignored, recreated each run
+├── reconcile/  # audit scripts + reports (DOCX-vs-XLSX, pipeline-vs-DOCX)
+├── Banco_ABC_Valuation_Resian_2026-05_1.docx   # GOLDEN reference (root)
+└── 20260612 Teste - Análise de Carteira.xlsx.zip  # XLSX first-part (root)
+```
+
+The golden DOCX and XLSX live at the repo root (not in `input/`); `input/` holds
+only the raw CSVs the pipeline consumes.
 
 ## Source of truth (golden values) — READ FIRST
 
-- **The real golden copy is the DOCX** (`Banco_ABC_Valuation_Resian_2026-05_1.docx`).
-  Its values are the authoritative reference; `pipeline_csv.py` reproduces them from
-  the raw CSVs (principal 204,222,608.95; EAD 307,442,757.64; LGD 92.25%;
-  Over-60 1,192/23.84%).
-- **The XLSX (`20260612 Teste - Análise de Carteira.xlsx`) is NOT wrong — it uses a
-  different calculation method.** Its money is scaled ÷10 and its LGD is 91.5301%
-  (vs the DOCX's 92.25%); these are methodological differences, not errors. It is a
-  "first part" working model (raw loans with UF/Idade, Ever60 curves, per-safra PE).
+- **The real golden copy is the DOCX** (`Banco_ABC_Valuation_Resian_2026-05_1.docx`,
+  at repo root). Its values are the authoritative reference; `bin/pipeline_csv.py`
+  reproduces them from the raw CSVs (principal 204,222,608.95; EAD 307,442,757.64;
+  LGD 92.25%; Over-60 1,192/23.84%).
+- **The XLSX (`20260612 Teste - Análise de Carteira.xlsx.zip`, at repo root) is NOT
+  wrong — it uses a different calculation method.** Its money is scaled ÷10 and its
+  LGD is 91.5301% (vs the DOCX's 92.25%); these are methodological differences, not
+  errors. It is a "first part" working model (raw loans with UF/Idade, Ever60 curves,
+  per-safra PE). The `.zip` is a zip-of-xlsx; the reconcile scripts auto-extract.
 - **For now, compare CSV outputs against the DOCX ONLY.** Do not treat XLSX values as
   the target. See `reconcile/XLSX_vs_DOCX_differences.pdf` and `reconcile/AUDIT-REPORT.md`.
 
@@ -23,10 +39,10 @@ CSVs; outputs are ~19 CSVs handed off to Claude.ai to produce a DOCX report.
 pip install boto3 duckdb pandas numpy python-dateutil --break-system-packages
 
 # 1. Validate input layout FIRST. Exits 1 on blocking errors → do NOT run pipeline.
-python3 passo0_validacao.py --data_base 2026-05 --local_dir .
+python3 bin/passo0_validacao.py --data_base 2026-05 --local_dir input
 
 # 2. Only if passo0 exits 0:
-python3 pipeline_csv.py --cliente "Banco ABC" --data_base 2026-05 --local_dir . --output_dir ./output
+python3 bin/pipeline_csv.py --cliente "Banco ABC" --data_base 2026-05 --local_dir input --output_dir output
 ```
 
 `--local_dir` reads CSVs from disk (offline). Omit it (and keep `--bucket`) to
@@ -35,6 +51,22 @@ override the hardcoded Resian defaults; bucket default is `clientes-uploads`.
 
 `pipeline_csv.py --data_base` is **required** (format `AAAA-MM`). `--batch_size`
 (default 5) only matters for memory pressure — lower it if RAM is tight.
+
+## Reconcile (verify CSVs against the golden DOCX)
+
+```bash
+pip install pandas openpyxl pypdf   # reconcile deps (see reconcile/requirements.txt)
+
+# Full audit: pipeline output vs DOCX (Layer A) + XLSX internal + UF lineage (Layer B).
+python3 reconcile/audit.py output
+# Run-once gate: DOCX vs XLSX only (where the two golden stages agree/diverge).
+python3 reconcile/validate_docx_vs_xlsx.py
+```
+
+Both scripts resolve paths repo-relative (no hardcoded `/Users/...`). They read the
+golden DOCX/XLSX read-only and write reports into `reconcile/`. Expect 99/107 checks
+passing against the DOCX — the 8 known failures (1 PE, 6 VPL, 1 XLSX ever60
+monotonicity) are pre-existing methodology differences, not regressions.
 
 ## Memory invariants — DO NOT BREAK (machine freezes, needs reboot)
 
@@ -95,13 +127,14 @@ sign-off — they drive the valuation output.
 
 ## Inputs / outputs
 
-Inputs (one client per folder): `LOANS.csv`, `INSTALLMENTS.csv`,
+Inputs live in `input/` (one client per folder): `LOANS.csv`, `INSTALLMENTS.csv`,
 `RENEGOCIACAO.csv` (may be empty), `META.csv` (case-insensitive on disk;
 read as `META.csv` from bucket). `passo0_validacao.py` documents the exact
 required/optional columns and null rules per file — keep it and the pipeline
-in sync when changing schemas.
+in sync when changing schemas. These CSVs are tracked via Git LFS (see
+`.gitattributes`); run `git lfs pull` after clone or they'll be pointer stubs.
 
-Outputs land in `--output_dir` (default `./output`): `kpis.csv`, `vpl_cenarios.csv`,
+Outputs land in `--output_dir` (default `output/`, gitignored): `kpis.csv`, `vpl_cenarios.csv`,
 `parametros_pe.csv`, `rolagens.csv`, `faixas_atraso.csv`, `faixas_prazo.csv`,
 `rating.csv`, `uf.csv`, `perfil.csv`, `especie_situacao.csv`, `canal_situacao.csv`,
 `fpd_safras.csv`, `vencimentario.csv`, `comportamento_pagamento.csv`,
