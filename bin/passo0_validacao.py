@@ -27,9 +27,9 @@ Uso:
     python3 passo0_validacao.py --data_base 2026-05 --bucket outro-bucket
 
 Variaveis de ambiente (mesmas do pipeline_csv.py):
-    MINIO_URL        = https://storage-minio.resian.com.br
-    MINIO_ACCESS_KEY = client-valuation
-    MINIO_SECRET_KEY = valuation-2024
+    MINIO_URL        = https://...
+    MINIO_ACCESS_KEY = (set via env var or docker secret — never hardcoded)
+    MINIO_SECRET_KEY = (set via env var or docker secret — never hardcoded)
 
 Saida:
     Relatorio de validacao no terminal com status [OK] / [AVISO] / [ERRO]
@@ -254,9 +254,15 @@ def _criar_view_normalizada(conn, path, view_name):
 # ============================================================================
 
 def get_s3():
-    url    = os.environ.get("MINIO_URL",        "https://storage-minio.resian.com.br")
-    key    = os.environ.get("MINIO_ACCESS_KEY", "client-valuation")
-    secret = os.environ.get("MINIO_SECRET_KEY", "valuation-2024")
+    url = os.environ.get("MINIO_URL")
+    if not url:
+        sys.exit("ERRO: MINIO_URL env var is required (e.g. https://storage-minio.resian.com.br)")
+    key = os.environ.get("MINIO_ACCESS_KEY")
+    if not key:
+        sys.exit("ERRO: MINIO_ACCESS_KEY env var is required — no hardcoded default")
+    secret = os.environ.get("MINIO_SECRET_KEY")
+    if not secret:
+        sys.exit("ERRO: MINIO_SECRET_KEY env var is required — no hardcoded default")
     return boto3.client(
         "s3",
         endpoint_url=url,
