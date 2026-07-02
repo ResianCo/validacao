@@ -25,9 +25,10 @@ import argparse
 import json
 import logging
 import os
+import sys
 import tempfile
 import warnings
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -48,7 +49,6 @@ log = logging.getLogger("resian.pipeline")
 # CONSTANTES METODOLÓGICAS
 # ════════════════════════════════════════════════════════════════════════════
 
-CHUNK_SIZE   = 50_000   # linhas por chunk na leitura de CSVs grandes
 CORTE_MOBS   = 2        # mobs finais descartados para evitar contaminação
 DECAY_PERDA  = 0.85     # fator de decaimento do shape de perda
 DECAY_RECEITA_BASE = 0.92  # decay de receita do grupo "neutro" (perda = média da carteira)
@@ -60,19 +60,6 @@ DECAY_RECEITA_K    = 1.2   # sensibilidade do decay de receita à perda média d
                             # não há calibração 100% empírica possível pois k governa exclusivamente
                             # a região da curva além do max_mob_limpo, sem dado realizado.)
 TAXAS_VPL    = [0.01, 0.015]  # 1,0% a.m. e 1,5% a.m.
-
-# ════════════════════════════════════════════════════════════════════════════
-# ESTRUTURA DE BAIXO CONSUMO DE RAM
-# ════════════════════════════════════════════════════════════════════════════
-# Cada parcela do INSTALLMENTS (até 72M de linhas) é guardada como namedtuple.
-# Um namedtuple NÃO carrega um __dict__ por instância (usa __slots__ via tuple),
-# então consome ~3x a 5x menos RAM que um dict Python equivalente. Em 72M de
-# parcelas isso representa a diferença entre ~22GB (dicts) e ~6-7GB (namedtuples).
-# Acesso sempre por notação de ponto: p.dt_pago, p.valor_pago, etc.
-Parcela = namedtuple(
-    "Parcela",
-    ["num_parcela", "valor_parcela", "valor_pago", "dt_venc", "dt_pago", "dias_atraso"]
-)
 
 # ════════════════════════════════════════════════════════════════════════════
 # HELPERS
@@ -175,8 +162,11 @@ def duck_connect(local_dir=None):
         os.makedirs(tmpdir, exist_ok=True)
         conn.execute(f"PRAGMA temp_directory='{tmpdir}'")
         conn.execute("PRAGMA max_temp_directory_size='120GB'")
-    except Exception:
-        pass
+    except Exception as e:
+        # Spill-to-disk setup failed: log loudly (DuckDB will run in-RAM-only,
+        # which can OOM on the INSTALLMENTS scan) but don't abort — the engine
+        # may still complete on smaller inputs.
+        log.warning(f"  DuckDB temp-directory setup failed ({e}); running without spill-to-disk — OOM risk on large inputs")
     return conn
 
 
@@ -197,12 +187,9 @@ def read_csv_minio(s3, bucket, key, sep=";", encoding="utf-8", chunksize=None):
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
     path = tmp.name
     tmp.close()
-    try:
-        s3.download_file(bucket, key, path)
-        df = duckdb.read_csv(path).df()
-        return df
-    except:
-        raise
+    s3.download_file(bucket, key, path)
+    df = duckdb.read_csv(path).df()
+    return df
 # INGESTÃO
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -271,10 +258,6 @@ def load_loans(s3, bucket, local_dir=None):
     df_loans.columns = [c.strip().lower() for c in df_loans.columns]
     log.info(f"  {len(df_loans):,} contratos carregados")
 
-    # Stripping space from id_contrato right after Pandas loading
-    if "id_contrato" in df_loans.columns:
-        df_loans["id_contrato"] = df_loans["id_contrato"].astype(str).str.strip()
-    
     # CRÍTICO: normalizar id_contrato para string trimada na origem.
     # As parcelas (inst_by_id) são chaveadas por TRIM(CAST(... AS VARCHAR)) na
     # query DuckDB, ou seja, STRINGS. Se aqui o id_contrato ficar numérico, o
@@ -349,92 +332,6 @@ def load_renegociacoes(s3, bucket, local_dir=None):
     except Exception:
         log.warning("  RENEGOCIACAO.csv não encontrado — assumindo zero renegociações")
         return set()
-
-def load_installments(s3, bucket, data_base, df_loans, local_dir=None):
-    if local_dir:
-        path = f"{local_dir}/INSTALLMENTS.csv"
-    else:
-        raise ValueError("O pipeline streaming deve garantir diretorio local para base!")
-
-    # Conversão única CSV -> Parquet. O sniff/parse do CSV de 72M linhas (caro e
-    # "silencioso") acontece UMA vez; cada lote depois lê o Parquet (colunar, com
-    # column/predicate pushdown) em vez de re-escanear os 4.9GB do CSV a cada lote.
-    parquet_path = f"{local_dir}/INSTALLMENTS.parquet"
-    if not os.path.exists(parquet_path):
-        log.info("  Convertendo INSTALLMENTS.csv -> Parquet (uma única vez, com spill p/ disco)...")
-        conv = duck_connect(local_dir)
-        try:
-            conv.execute(f"""
-                COPY (
-                    SELECT * FROM read_csv_auto('{path}', sample_size=-1, ignore_errors=true)
-                ) TO '{parquet_path}' (FORMAT PARQUET, COMPRESSION ZSTD)
-            """)
-        finally:
-            conv.close()
-        log.info("  Parquet pronto (lotes seguintes leem deste arquivo).")
-            
-    print(f"      [CHUNKING INSTALLMENTS DO LOTE] carregando via scan do Parquet com filter em {len(df_loans)} loans... \n", flush=True)
-
-    # Regra de ouro 2: o DuckDB mapeia o DataFrame 'df_loans' nativamente como
-    # tabela SQL. O cruzamento é um INNER JOIN relacional direto no motor do
-    # DuckDB, sem nenhuma cláusula WHERE id IN (...) com strings gigantes.
-    q = f"""
-    SELECT 
-        i.id_contrato as id_contrato,
-        data_vencimento,
-        data_pagamento,
-        CAST(REPLACE(REPLACE(CAST(i.num_parcela AS VARCHAR), '.', ''), ',', '.') AS INTEGER) as num_parcela,
-        CAST(REPLACE(REPLACE(CAST(i.valor_parcela AS VARCHAR), '.', ''), ',', '.') AS DOUBLE) as valor_parcela,
-        CAST(REPLACE(REPLACE(CAST(i.valor_pago AS VARCHAR), '.', ''), ',', '.') AS DOUBLE) as valor_pago,
-        CAST(REPLACE(REPLACE(CAST(i.dias_atraso AS VARCHAR), '.', ''), ',', '.') AS DOUBLE) as dias_atraso
-    FROM read_parquet('{parquet_path}') i
-    INNER JOIN df_loans l
-        ON i.id_contrato = l.id_contrato
-    """
-    
-    log.info("  Executando query analítica com INNER JOIN relacional no DuckDB...")
-    conn = duck_connect(local_dir)
-    inst_by_id = defaultdict(list)
-    linhas_uteis = 0
-    try:
-        cursor = conn.cursor()
-        cursor.execute(q)
-
-        # Regra de ouro 3: NUNCA usar .df() (transformaria 72M de linhas num
-        # DataFrame pandas e estouraria a RAM) nem .iterrows(). Iteramos linha a
-        # linha direto no cursor do DuckDB, que mantém apenas um buffer pequeno.
-        log.info("  Populando parcelas via cursor (fetchmany, namedtuple, baixo consumo de RAM)...")
-        while True:
-            rows = cursor.fetchmany(50_000)
-            if not rows:
-                break
-            for row in rows:
-                dt_venc = parse_date(row[1])
-                if dt_venc is None:
-                    continue
-
-                dt_pago_raw = str(row[2]).strip() if row[2] is not None else ""
-                dt_pago = parse_date(dt_pago_raw) if dt_pago_raw not in ("", "nan", "None", "Nat", "NaT") else None
-
-                # Regra de ouro 4: cada linha vira um namedtuple Parcela (leve),
-                # nunca um dict Python.
-                inst_by_id[row[0]].append(Parcela(
-                    num_parcela   = row[3] if row[3] is not None else 0,
-                    valor_parcela = row[4] if row[4] is not None else 0.0,
-                    valor_pago    = row[5] if row[5] is not None else 0.0,
-                    dt_venc       = dt_venc,
-                    dt_pago       = dt_pago,
-                    dias_atraso   = row[6] if row[6] is not None else 0.0,
-                ))
-                linhas_uteis += 1
-    finally:
-        conn.close()
-        if tmp_criado:
-            try: os.unlink(path)
-            except: pass
-
-    log.info(f"  {linhas_uteis:,} linhas úteis processadas | {len(inst_by_id):,} contratos mapeados")
-    return inst_by_id
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -615,72 +512,7 @@ def calc_cruzamento(loans, col_grupo, col_sit, label_grupo):
     return sorted(rows, key=lambda r: -r["principal"])
 
 
-# ── 8. FPD por safra ─────────────────────────────────────────────────────────
-
-def calc_fpd(loans, inst_by_id):
-    print("      -> calc_fpd", flush=True)
-    """
-    FPD calculado a partir do INSTALLMENTS (parcela num_parcela == 1).
-    FPD = não paga OU dias_atraso > 30.
-    """
-    loan_map = loans.set_index("id_contrato").to_dict(orient="index")
-    fpd_safra = defaultdict(lambda: {
-        "total_n": 0, "total_val": 0.0,
-        "fpd_n":   0, "fpd_val":   0.0,
-        "sem_p1":  0,
-    })
-
-    for id_contrato, insts in inst_by_id.items():
-        loan = loan_map.get(id_contrato)
-        if loan is None:
-            continue
-        safra = loan["safra"]
-        princ = loan["principal"]
-        fpd_safra[safra]["total_n"]   += 1
-        fpd_safra[safra]["total_val"] += princ
-
-        primeiras = [i for i in insts if i.num_parcela == 1]
-        if not primeiras:
-            fpd_safra[safra]["sem_p1"] += 1
-            continue
-
-        p1     = primeiras[0]
-        is_fpd = (p1.dt_pago is None) or (p1.dias_atraso > 30)
-        if is_fpd:
-            fpd_safra[safra]["fpd_n"]   += 1
-            fpd_safra[safra]["fpd_val"] += princ
-
-    rows = []
-    for safra in sorted(fpd_safra):
-        d    = fpd_safra[safra]
-        tn   = d["total_n"]
-        tv   = d["total_val"]
-        fn   = d["fpd_n"]
-        fv   = d["fpd_val"]
-        qpct = fn / tn * 100   if tn > 0 else 0
-        vpct = fv / tv * 100   if tv > 0 else 0
-
-        if qpct > 80:
-            sig = "Dado incompleto"
-        elif qpct > 20:
-            sig = "Alto"
-        elif qpct > 10:
-            sig = "Elevado"
-        elif qpct > 5:
-            sig = "Moderado"
-        else:
-            sig = "Adequado"
-
-        rows.append({
-            "safra":        safra,
-            "contratos_n":  tn,
-            "fpd_n":        fn,
-            "fpd_qtd_pct":  round(qpct, 2),
-            "fpd_val_pct":  round(vpct, 2),
-            "sem_parcela1": d["sem_p1"],
-            "sinalizacao":  sig,
-        })
-    return rows
+# ── 8. FPD por safra — ver calc_fpd_duck (agregação DuckDB out-of-core) ──────
 
 
 # ── 9. Vencimentário ─────────────────────────────────────────────────────────
@@ -701,127 +533,15 @@ def calc_vencimentario(loans, data_base):
 
 
 # ── 10. Comportamento de pagamento por safra ──────────────────────────────────
-
-def calc_comportamento_pagamento(loans, inst_by_id, data_base):
-    # DESATIVADA (era um BYPASS que retornava []). Substituída por
-    # calc_comportamento_pagamento_duck (agregação out-of-core no DuckDB).
-    raise NotImplementedError("Use calc_comportamento_pagamento_duck (DuckDB).")
+# Ver calc_comportamento_pagamento_duck (agregação out-of-core no DuckDB).
 
 
 # ── 11. Rolagens ─────────────────────────────────────────────────────────────
+# Ver calc_rolagens_duck (DuckDB out-of-core) e _rolagens_from_buckets (live).
 
-def bucket_dpd(dpd):
-    # Removendo tolerância de 5 dias do 'corrente' conforme padrão de mercado de rolagens contábeis estritas?
-    # Não, o cliente pediu para voltar para a regra de `dpd <= 5` como corrente! Mas as faixas subsequentes
-    # devem iniciar em 6 e ir até 30, porém ele chamou de '5-30' por simplicidade (ou seja, de 5 até 30 na nomenclatura dele)
-    # Importante: Como ele pede pra garantir as faixas "5-30", o nome fica f5_30, mas o corte é 5.
-    if dpd <= 5:   return "corrente"
-    if dpd <= 30:  return "f5_30"
-    if dpd <= 60:  return "f31_60"
-    if dpd <= 90:  return "f61_90"
-    if dpd <= 120: return "f91_120"
-    if dpd <= 150: return "f121_150"
-    if dpd <= 180: return "f151_180"
-    return "f180p"
-
-
+# Faixas de DPD usadas por calc_rolagens_duck e _rolagens_from_buckets.
 BUCKETS = ["corrente", "f5_30", "f31_60", "f61_90",
            "f91_120", "f121_150", "f151_180", "f180p"]
-
-
-def _dt_to_date(d):
-    """Converte datetime/date/str para date. Definida fora dos loops para eficiência."""
-    import datetime as _dt_mod
-    if d is None:
-        return None
-    if isinstance(d, _dt_mod.datetime):
-        return d.date()
-    if hasattr(d, 'date') and callable(d.date):
-        return d.date()
-    if isinstance(d, _dt_mod.date):
-        return d
-    if isinstance(d, str):
-        parsed = parse_date(d)
-        return parsed.date() if parsed else None
-    return None
-
-
-def _bucket_dpd(dpd):
-    if dpd <= 5:   return "corrente"
-    if dpd <= 30:  return "f5_30"
-    if dpd <= 60:  return "f31_60"
-    if dpd <= 90:  return "f61_90"
-    if dpd <= 120: return "f91_120"
-    if dpd <= 150: return "f121_150"
-    if dpd <= 180: return "f151_180"
-    return "f180p"
-
-
-def _build_buckets_mes(loans_batch, inst_by_id_batch, meses_dt):
-    """
-    Computa saldos por bucket DPD em cada mês para um lote de contratos.
-    Retorna dict {ym: {bucket: saldo}} que pode ser somado entre lotes.
-    """
-    import datetime as _dt_mod
-    loan_map = loans_batch.set_index("id_contrato").to_dict(orient="index")
-    buckets_mes = {
-        ym(cal_dt): {"corrente": 0.0, "f5_30": 0.0, "f31_60": 0.0,
-                     "f61_90": 0.0, "f91_120": 0.0, "f121_150": 0.0,
-                     "f151_180": 0.0, "f180p": 0.0}
-        for cal_dt in meses_dt
-    }
-
-    # DESATIVADA (este corpo era um BYPASS que retornava buckets zerados).
-    # As rolagens agora são calculadas em calc_rolagens_duck (DuckDB out-of-core).
-    raise NotImplementedError("Use calc_rolagens_duck (DuckDB).")
-        
-
-    # CODIGO NUNCA EXECUTADO no bypass
-    for id_contrato, insts in inst_by_id_batch.items():
-        loan = loan_map.get(id_contrato)       # CORRIGIDO: era loan = None
-        if loan is None or not isinstance(loan, dict):
-            continue
-
-        pmt_val    = float(loan.get("pmt", 0) or 0)
-        num_parcelas = int(loan.get("num_parcelas", 0) or 0)
-
-        for cal_dt in meses_dt:
-            cal_dt_date = cal_dt.date() if isinstance(cal_dt, _dt_mod.datetime) else cal_dt
-
-            pagas = sum(
-                1 for i in insts
-                if _dt_to_date(i.dt_pago) is not None
-                and _dt_to_date(i.dt_pago) <= cal_dt_date
-            )
-            restantes = max(num_parcelas - pagas, 0)
-            saldo = pmt_val * restantes
-
-            vencidas = [
-                i for i in insts
-                if _dt_to_date(i.dt_venc) is not None
-                and _dt_to_date(i.dt_venc) <= cal_dt_date
-            ]
-            nao_pagas = [
-                i for i in vencidas
-                if _dt_to_date(i.dt_pago) is None
-                or _dt_to_date(i.dt_pago) > cal_dt_date
-            ]
-
-            mes_ym = ym(cal_dt)
-            if not nao_pagas:
-                buckets_mes[mes_ym]["corrente"] += saldo
-            else:
-                dias_list = [
-                    (cal_dt_date - _dt_to_date(i.dt_venc)).days
-                    for i in nao_pagas
-                    if _dt_to_date(i.dt_venc) is not None
-                ]
-                if dias_list:
-                    buckets_mes[mes_ym][_bucket_dpd(max(dias_list))] += saldo
-                else:
-                    buckets_mes[mes_ym]["corrente"] += saldo
-
-    return buckets_mes
 
 
 def _rolagens_from_buckets(buckets_mes, meses_dt):
@@ -923,28 +643,9 @@ def _rolagens_from_buckets(buckets_mes, meses_dt):
     return rows, effic60_ltm, effic90_ltm
 
 
-def calc_rolagens(loans, inst_by_id, data_base):
-    print("      -> calc_rolagens", flush=True)
-    """Wrapper público: constrói meses, computa buckets e retorna rolagens."""
-    safras = [s for s in loans["safra"].unique() if s != "N/I"]
-    if not safras:
-        return [], 0.0, 0.0
-
-    import datetime as _dt_mod
-    dt_inicio = _dt_mod.datetime.strptime(sorted(safras)[0], "%Y-%m")
-    meses_dt  = []
-    cur = dt_inicio
-    while cur <= data_base:
-        meses_dt.append(cur)
-        cur += relativedelta(months=1)
-
-    buckets_mes = _build_buckets_mes(loans, inst_by_id, meses_dt)
-    return _rolagens_from_buckets(buckets_mes, meses_dt)
-
-
 # ── 12. EAD ──────────────────────────────────────────────────────────────────
 
-def calc_ead(loans, inst_by_id, data_base):
+def calc_ead(loans, data_base):
     print("      -> calc_ead", flush=True)
     """
     EAD = PMT × prazo_original (somatório de PMTs no momento zero).
@@ -1483,43 +1184,7 @@ def calc_vpl(loans, data_base, lgd, local_dir=None):
 
 
 # ── 13. Shapes e projeções (perda + receita) ──────────────────────────────────
-
-def calc_shapes_e_projecoes(loans, inst_by_id, data_base):
-    # DESATIVADA (era um BYPASS que retornava []). A acumulação de perda/receita
-    # por safra×MOB agora é feita em acumular_shapes_duck + _calc_shapes_from_accumulated.
-    raise NotImplementedError("Use acumular_shapes_duck + _calc_shapes_from_accumulated.")
-    print("      -> calc_vpl", flush=True)
-    """
-    VPL = valor presente dos PMTs futuros (dt_venc > DATA_BASE),
-    descontados usando PD × LGD como taxa de perda sobre cada PMT.
-    PD em quantidade de contratos (n_over60 / n_total).
-
-    NOTA: inst_by_id contém apenas parcelas vencidas (filtro na ingestão).
-    O vencimentário futuro é reconstruído a partir de loans diretamente,
-    iterando sobre TODOS os contratos (não apenas os que têm parcelas vencidas).
-    """
-    print("      -> [BYPASS] LOOP de 1 Milhao calc_vpl ignorado em iteracao lote: o VPL ira rodar sinteticamente sem encavalar", flush=True)        
-    future_by_dp = defaultdict(float)
-
-    taxa_perda = pd_qty * lgd
-    pmt_bruto  = sum(future_by_dp.values())
-    perda_est  = pmt_bruto * taxa_perda
-    fluxo_liq  = pmt_bruto - perda_est
-
-    results = {}
-    for taxa in TAXAS_VPL:
-        cenarios = {}
-        for cenario, fator in [("otimista",   0.80),
-                                ("base",       1.00),
-                                ("pessimista", 1.20)]:
-            vpl = sum(
-                (pmt - pmt * taxa_perda * fator) / (1 + taxa) ** dp
-                for dp, pmt in future_by_dp.items()
-            )
-            cenarios[cenario] = round(vpl, 2)
-        results[taxa] = cenarios
-
-    return results, round(pmt_bruto, 2), round(perda_est, 2), round(fluxo_liq, 2)
+# Ver acumular_shapes_duck + _calc_shapes_from_accumulated (agregação DuckDB).
 
 
 # ── 15. Matrizes Rating × BHV ────────────────────────────────────────────────
@@ -1690,7 +1355,7 @@ def process_installments_em_lotes(s3, bucket, loans, data_base,
 
     # ── EAD (somente LOANS) ──────────────────────────────────────────────────
     log.info("Calculando EAD...")
-    ead_total, ead_inad = calc_ead(loans, {}, data_base)
+    ead_total, ead_inad = calc_ead(loans, data_base)
 
     # ── VPL (PD por safra × LGD = Effic90 global) ────────────────────────────
     log.info(f"Calculando VPL (PD por safra × Effic90 global={effic90_ltm:.4f})...")
