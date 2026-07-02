@@ -1,0 +1,49 @@
+# CI for the validacao pipeline. Runs the two-script pipeline against the
+# golden ABC data, then audits the CSV output against the DOCX golden.
+# Fails on any regression outside the documented KNOWN_FAILURES set.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: pipeline + DOCX audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install boto3 duckdb pandas numpy python-dateutil
+          pip install -r reconcile/requirements.txt
+
+      - name: Validate input layout (passo 0)
+        run: |
+          python bin/passo0_validacao.py --data_base 2026-05 --local_dir input
+
+      - name: Run pipeline (offline — reads from input/, no MinIO)
+        run: |
+          python bin/pipeline_csv.py \
+            --cliente "Banco ABC" \
+            --data_base 2026-05 \
+            --local_dir input \
+            --output_dir output \
+            --bucket ""
+
+      - name: Audit CSV output against DOCX golden
+        run: |
+          python reconcile/audit.py output

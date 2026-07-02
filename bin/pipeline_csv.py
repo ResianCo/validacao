@@ -189,6 +189,10 @@ def read_csv_minio(s3, bucket, key, sep=";", encoding="utf-8", chunksize=None):
     Usado apenas por arquivos pequenos (META.csv). Para LOANS/INSTALLMENTS o
     motor é o DuckDB lendo o CSV direto do disco.
     """
+    # Offline mode (--bucket ""): no S3 client, so don't attempt a network call
+    # — raise immediately so the caller's try/except falls back to defaults.
+    if s3 is None:
+        raise RuntimeError("no S3 client configured (offline mode)")
     log.info(f"  Baixando s3://{bucket}/{key} via streaming para o disco …")
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
     path = tmp.name
@@ -1910,6 +1914,8 @@ def main():
              f"Data-base: {args.data_base} | batch_size: {args.batch_size}")
 
     # ── Conexão e ingestão ───────────────────────────────────────────────────
+    # --bucket "" disables S3/MinIO entirely (fully offline: reads everything
+    # from --local_dir). Used by CI, where MinIO is not reachable.
     s3 = None
     if args.bucket:
         s3 = get_s3()
