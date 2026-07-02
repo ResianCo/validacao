@@ -6,5 +6,13 @@
 /duck_tmp/
 /input/duck_tmp/
 
+# pytest cache + Python bytecode (Pass 5c)
+/.pytest_cache/
+/tests/__pycache__/
+/bin/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
 # macOS
 .DS_Store
