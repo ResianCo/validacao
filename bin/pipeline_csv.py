@@ -38,7 +38,13 @@ import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-warnings.filterwarnings("ignore")
+# Silence only the deprecation warnings that originate from third-party
+# libraries we don't control. Other warnings remain visible so that
+# data-quality issues (e.g. unexpected dtypes) are not hidden.
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="boto3")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="botocore")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="duckdb")
+warnings.filterwarnings("ignore", category=FutureWarning, module="pandas")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)s  %(message)s"
@@ -78,18 +84,37 @@ def parse_date(s):
 
 
 def parse_float(s):
+    """Parse a BR- or US-locale number string to float.
+
+    Returns 0.0 for empty/NaN input. On a non-numeric string, logs an
+    error (failing loudly) and returns 0.0 instead of silently producing
+    a zero that would corrupt financial aggregations.
+    """
+    if s is None:
+        return 0.0
     try:
-        s = str(s).strip()
-        if ',' in s and '.' in s:
-            if s.rfind(',') > s.rfind('.'):
-                return float(s.replace('.', '').replace(',', '.'))
+        if pd.isna(s):
+            return 0.0
+    except (TypeError, ValueError):
+        pass
+    raw = str(s).strip()
+    if not raw:
+        return 0.0
+    norm = raw
+    try:
+        if ',' in norm and '.' in norm:
+            if norm.rfind(',') > norm.rfind('.'):
+                # BR: 1.234,56
+                norm = norm.replace('.', '').replace(',', '.')
             else:
-                return float(s.replace(',', ''))
-        elif ',' in s:
-             return float(s.replace(',', '.'))
-        else:
-             return float(s)
-    except Exception:
+                # US: 1,234.56
+                norm = norm.replace(',', '')
+        elif ',' in norm:
+            # Treat trailing comma as decimal separator (BR without thousands).
+            norm = norm.replace(',', '.')
+        return float(norm)
+    except (ValueError, TypeError) as e:
+        log.error("parse_float: cannot interpret %r as a number (%s); returning 0.0", raw, e)
         return 0.0
 
 
@@ -97,6 +122,13 @@ def fmt_brl(v):
     if v is None or (isinstance(v, float) and np.isnan(v)):
         return "R$ 0,00"
     return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def q(s):
+    """Escape a Python string for safe inclusion inside a DuckDB SQL
+    single-quoted literal. Path arguments interpolated into SQL strings
+    should be wrapped with this helper."""
+    return str(s).replace("'", "''")
 
 
 def fmt_pct(v, dec=2):
@@ -251,7 +283,7 @@ def load_loans(s3, bucket, local_dir=None):
     conn = duck_connect(local_dir)
     try:
         df_loans = conn.execute(
-            f"SELECT * FROM read_csv('{path}', auto_detect=true, sample_size=-1, ignore_errors=true, all_varchar=true)"
+            f"SELECT * FROM read_csv('{q(path)}', auto_detect=true, sample_size=-1, ignore_errors=true, all_varchar=true)"
         ).df()
     finally:
         conn.close()
@@ -330,7 +362,7 @@ def load_renegociacoes(s3, bucket, local_dir=None):
         try:
             rows = conn.execute(f"""
                 SELECT DISTINCT TRIM(CAST(id_contrato_origem AS VARCHAR)) AS id
-                FROM read_csv_auto('{path}', sample_size=-1, ignore_errors=true)
+                FROM read_csv_auto('{q(path)}', sample_size=-1, ignore_errors=true)
             """).fetchall()
         finally:
             conn.close()
@@ -716,7 +748,7 @@ def garantir_parquet(local_dir, s3=None, bucket=None):
         try:
             conv.execute(f"""
                 COPY (
-                    SELECT * FROM read_csv_auto('{csv_path}', sample_size=-1, ignore_errors=true)
+                    SELECT * FROM read_csv_auto('{q(csv_path)}', sample_size=-1, ignore_errors=true)
                 ) TO '{parquet_path}' (FORMAT PARQUET, COMPRESSION ZSTD)
             """)
         finally:
@@ -747,7 +779,7 @@ def calc_fpd_duck(loans, parquet_path, local_dir):
                     {_sql_int('num_parcela')}            AS num_parcela,
                     {_sql_date('data_pagamento')}        AS dt_pago,
                     {_sql_num('dias_atraso')}            AS dias_atraso
-                FROM read_parquet('{parquet_path}')
+                FROM read_parquet('{q(parquet_path)}')
                 WHERE {_sql_date('data_vencimento')} IS NOT NULL
             ),
             por_contrato AS (
@@ -835,7 +867,7 @@ def acumular_shapes_duck(loans, parquet_path, data_base, local_dir):
                     {_sql_num('valor_parcela')}        AS valor_parcela,
                     {_sql_num('valor_pago')}           AS valor_pago,
                     {_sql_num('dias_atraso')}          AS dias_atraso
-                FROM read_parquet('{parquet_path}')
+                FROM read_parquet('{q(parquet_path)}')
             ),
             joined AS (
                 SELECT
@@ -914,7 +946,7 @@ def calc_comportamento_pagamento_duck(loans, parquet_path, data_base, local_dir)
                     {_sql_date('data_vencimento')}     AS dt_venc,
                     {_sql_date('data_pagamento')}      AS dt_pago,
                     {_sql_num('valor_parcela')}        AS valor_parcela
-                FROM read_parquet('{parquet_path}')
+                FROM read_parquet('{q(parquet_path)}')
             ),
             j AS (
                 SELECT l.safra AS safra, i.dt_venc, i.dt_pago, i.valor_parcela
@@ -1028,7 +1060,7 @@ def calc_rolagens_duck(loans, parquet_path, data_base, local_dir):
                     id_contrato AS id,
                     {_sql_date('data_vencimento')}     AS dt_venc,
                     {_sql_date('data_pagamento')}      AS dt_pago
-                FROM read_parquet('{parquet_path}')
+                FROM read_parquet('{q(parquet_path)}')
             ),
             inst AS (
                 SELECT * FROM inst0 WHERE dt_venc IS NOT NULL
@@ -1568,6 +1600,16 @@ def main():
     parser.add_argument("--force_local", type=str, default="",
                         help="Caminho fisico do INSTALLMENT LOCAL")
     args = parser.parse_args()
+
+    # Validate path-shaped CLI args: must exist, be directories, and
+    # contain no characters that would let a path break out of a single-
+    # quoted SQL string or shell-escape.
+    for p, name in ((args.local_dir, "--local_dir"), (args.force_local, "--force_local")):
+        if p:
+            if any(c in p for c in ("'", '"', ";", "&", "|", "$", "`", "\n", "\r")):
+                raise ValueError(f"{name} contains disallowed characters: {p!r}")
+            if not os.path.isdir(p):
+                raise ValueError(f"{name} does not exist or is not a directory: {p!r}")
 
     if not args.local_dir and not args.bucket:
         print("\n[ERRO] Voce deve fornecer no minimo a flag --local_dir ou a flag --bucket.\n")

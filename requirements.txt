@@ -1,0 +1,10 @@
+# Pinned versions for the Python reference pipeline.
+# The numbers are the major.minor observed in production (2026-07);
+# upper bounds are omitted to allow patch updates, but the pipeline
+# should be revalidated against the DOCX golden whenever any of these
+# libraries are upgraded.
+boto3>=1.43,<2
+pandas>=3.0,<4
+numpy>=2.5,<3
+duckdb>=1.5,<2
+python-dateutil>=2.9,<3
